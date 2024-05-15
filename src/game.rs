@@ -58,6 +58,17 @@ fn setup(
         ..Default::default()
     });
 
+    commands.spawn((
+        RigidBody::Dynamic,
+        Collider::sphere(1.0),
+        PbrBundle {
+            mesh: meshes.add(Cuboid::default()),
+            material: materials.add(StandardMaterial::default()),
+            transform: Transform::from_xyz(3.0, 3.0, 1.0),
+            ..Default::default()
+        },
+    ));
+
     let ground_material = materials.add(StandardMaterial::default());
     let ground_mesh = meshes.add(Plane3d::default().mesh().size(15.0, 15.0));
     commands.spawn((
@@ -93,17 +104,21 @@ fn setup(
         ..Default::default()
     });
     let player_collider = commands
-        .spawn((Collider::default(), Transform::from_xyz(0.0, 0.0, 0.0)))
+        .spawn((
+            Collider::default(),
+            Transform::from_xyz(0.0, 0.1, 0.0),
+            CollisionLayers::default(),
+        ))
         .id();
     commands
         .spawn(PlayerBundle {
             pbr_bundle: PbrBundle {
                 mesh: player_mesh,
                 material: player_material,
-                transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                transform: Transform::from_xyz(0.0, 3.0, 0.0),
                 ..Default::default()
             },
-            rigidbody: RigidBody::Kinematic,
+            rigidbody: RigidBody::Dynamic,
             locked_axes: LockedAxes::from_bits(0b000_111),
             ..Default::default()
         })

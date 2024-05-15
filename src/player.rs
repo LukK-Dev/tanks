@@ -21,8 +21,16 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(AimPosition::default())
-            .add_systems(Update, (movement, update_aim_position, aim_turret).chain());
+        app.insert_resource(AimPosition::default()).add_systems(
+            Update,
+            (
+                movement,
+                update_aim_position,
+                aim_turret,
+                update_last_frame_velocity,
+            )
+                .chain(),
+        );
     }
 }
 
@@ -39,7 +47,7 @@ pub struct MovementParameters {
 impl Default for MovementParameters {
     fn default() -> Self {
         Self {
-            acceleration: 2.0,
+            acceleration: 3.0,
             dampening: 10.0,
             max_velocity: 2.0,
             turn_acceleration: 20.0,
@@ -48,6 +56,9 @@ impl Default for MovementParameters {
         }
     }
 }
+
+#[derive(Component, Default)]
+struct LastFrameVelocity(Vec3);
 
 #[derive(Component, Default)]
 struct TurnVelocity(f32);
@@ -62,11 +73,12 @@ pub struct PlayerBundle {
     pub pbr_bundle: PbrBundle,
     pub input_bundle: InputManagerBundle<Action>,
     pub movement_parameters: MovementParameters,
-    pub turn_velocity: TurnVelocity,
     pub collision_layers: CollisionLayers,
     pub rigidbody: RigidBody,
     pub locked_axes: LockedAxes,
     pub friction: Friction,
+    pub turn_velocity: TurnVelocity,
+    pub last_frame_velocity: LastFrameVelocity,
 }
 
 impl Default for PlayerBundle {
@@ -84,11 +96,12 @@ impl Default for PlayerBundle {
             pbr_bundle: PbrBundle::default(),
             input_bundle: InputManagerBundle::with_map(input_map),
             movement_parameters: MovementParameters::default(),
-            turn_velocity: TurnVelocity::default(),
             collision_layers: CollisionLayers::new(GamePhysicsLayer::Default, LayerMask::ALL),
             rigidbody: RigidBody::Dynamic,
             locked_axes: LockedAxes::default(),
             friction: Friction::ZERO.with_combine_rule(CoefficientCombine::Min),
+            turn_velocity: TurnVelocity::default(),
+            last_frame_velocity: LastFrameVelocity::default(),
         }
     }
 }
@@ -109,6 +122,7 @@ fn movement(
             &MovementParameters,
             &mut TurnVelocity,
             &mut LinearVelocity,
+            &LastFrameVelocity,
             &ActionState<Action>,
         ),
         With<Player>,
@@ -120,22 +134,9 @@ fn movement(
     if player.is_err() {
         return;
     }
-    let (mut transform, params, mut turn_velocity, mut velocity, action) = player.unwrap();
-
+    let (mut transform, params, mut turn_velocity, mut velocity, last_frame_velocity, action) =
+        player.unwrap();
     let dt = time.delta_seconds();
-
-    match (
-        action.pressed(&Action::TurnLeft),
-        action.pressed(&Action::TurnRight),
-    ) {
-        (true, false) => turn_velocity.0 += params.turn_acceleration * dt,
-        (false, true) => turn_velocity.0 -= params.turn_acceleration * dt,
-        _ => turn_velocity.0 *= 1.0 - params.turn_dampening * dt,
-    }
-    turn_velocity.0 = turn_velocity
-        .0
-        .clamp(-params.max_turn_velocity, params.max_turn_velocity);
-    transform.rotate_local_y(turn_velocity.0 * dt);
 
     // let velocity_delta = transform.forward() * params.acceleration * dt;
     // if action.pressed(&Action::MoveForward) {
@@ -153,6 +154,24 @@ fn movement(
     //     velocity.0.z *= params.dampening;
     // }
 
+    match (
+        action.pressed(&Action::MoveForward),
+        action.pressed(&Action::MoveBackward),
+    ) {
+        (true, false) => velocity.0 += transform.forward() * params.acceleration * dt,
+        (false, true) => velocity.0 -= transform.forward() * params.acceleration * dt,
+        _ => {
+            let dampening_factor = 1.0 - params.dampening * dt;
+            velocity.0.x *= dampening_factor;
+            velocity.0.z *= dampening_factor;
+        }
+    }
+    let clamped_horizontal_velocity = velocity.xz().clamp_length_max(params.max_velocity);
+    let projected_horizontal_velocity =
+        clamped_horizontal_velocity.project_onto(transform.forward().xz());
+    velocity.x = projected_horizontal_velocity.x;
+    velocity.z = projected_horizontal_velocity.y;
+
     cfg_if::cfg_if! {
         if #[cfg(debug_assertions)] {
             gizmos.arrow(
@@ -162,6 +181,21 @@ fn movement(
             );
         }
     }
+
+    let velocity_delta = velocity.0 - last_frame_velocity.0;
+    let forward_sign = transform.forward().xz().dot(velocity_delta.xz()).signum();
+    match (
+        action.pressed(&Action::TurnLeft),
+        action.pressed(&Action::TurnRight),
+    ) {
+        (true, false) => turn_velocity.0 += params.turn_acceleration * forward_sign * dt,
+        (false, true) => turn_velocity.0 -= params.turn_acceleration * forward_sign * dt,
+        _ => turn_velocity.0 *= 1.0 - params.turn_dampening * dt,
+    }
+    turn_velocity.0 = turn_velocity
+        .0
+        .clamp(-params.max_turn_velocity, params.max_turn_velocity);
+    transform.rotate_local_y(turn_velocity.0 * dt);
 }
 
 fn aim_turret(
@@ -222,5 +256,11 @@ fn update_aim_position(
                 }
             }
         }
+    }
+}
+
+fn update_last_frame_velocity(mut query: Query<(&LinearVelocity, &mut LastFrameVelocity)>) {
+    for (velocity, mut last_frame_velocity) in query.iter_mut() {
+        last_frame_velocity.0 = velocity.0;
     }
 }
