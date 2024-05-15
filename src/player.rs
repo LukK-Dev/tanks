@@ -31,19 +31,26 @@ pub struct MovementParameters {
     pub acceleration: f32,
     pub dampening: f32,
     pub max_velocity: f32,
-    pub turn_speed: f32,
+    pub turn_acceleration: f32,
+    pub turn_dampening: f32,
+    pub max_turn_velocity: f32,
 }
 
 impl Default for MovementParameters {
     fn default() -> Self {
         Self {
             acceleration: 2.0,
-            dampening: 0.9,
+            dampening: 10.0,
             max_velocity: 2.0,
-            turn_speed: PI * 0.5,
+            turn_acceleration: 20.0,
+            turn_dampening: 15.0,
+            max_turn_velocity: PI * 0.5,
         }
     }
 }
+
+#[derive(Component, Default)]
+struct TurnVelocity(f32);
 
 #[derive(Component, Default)]
 pub struct Player;
@@ -55,6 +62,7 @@ pub struct PlayerBundle {
     pub pbr_bundle: PbrBundle,
     pub input_bundle: InputManagerBundle<Action>,
     pub movement_parameters: MovementParameters,
+    pub turn_velocity: TurnVelocity,
     pub collision_layers: CollisionLayers,
     pub rigidbody: RigidBody,
     pub locked_axes: LockedAxes,
@@ -76,6 +84,7 @@ impl Default for PlayerBundle {
             pbr_bundle: PbrBundle::default(),
             input_bundle: InputManagerBundle::with_map(input_map),
             movement_parameters: MovementParameters::default(),
+            turn_velocity: TurnVelocity::default(),
             collision_layers: CollisionLayers::new(GamePhysicsLayer::Default, LayerMask::ALL),
             rigidbody: RigidBody::Dynamic,
             locked_axes: LockedAxes::default(),
@@ -93,13 +102,12 @@ pub struct TurretBundle {
     pub pbr_bundle: PbrBundle,
 }
 
-// TODO: dampen rotation ass well
-
 fn movement(
     mut player: Query<
         (
             &mut Transform,
             &MovementParameters,
+            &mut TurnVelocity,
             &mut LinearVelocity,
             &ActionState<Action>,
         ),
@@ -112,16 +120,38 @@ fn movement(
     if player.is_err() {
         return;
     }
-    let (mut transform, params, mut velocity, action) = player.unwrap();
+    let (mut transform, params, mut turn_velocity, mut velocity, action) = player.unwrap();
 
     let dt = time.delta_seconds();
 
-    if action.pressed(&Action::TurnLeft) {
-        transform.rotate_local_y(params.turn_speed * dt)
+    match (
+        action.pressed(&Action::TurnLeft),
+        action.pressed(&Action::TurnRight),
+    ) {
+        (true, false) => turn_velocity.0 += params.turn_acceleration * dt,
+        (false, true) => turn_velocity.0 -= params.turn_acceleration * dt,
+        _ => turn_velocity.0 *= 1.0 - params.turn_dampening * dt,
     }
-    if action.pressed(&Action::TurnRight) {
-        transform.rotate_local_y(-params.turn_speed * dt)
-    }
+    turn_velocity.0 = turn_velocity
+        .0
+        .clamp(-params.max_turn_velocity, params.max_turn_velocity);
+    transform.rotate_local_y(turn_velocity.0 * dt);
+
+    // let velocity_delta = transform.forward() * params.acceleration * dt;
+    // if action.pressed(&Action::MoveForward) {
+    //     velocity.0 += velocity_delta
+    // }
+    // if action.pressed(&Action::MoveBackward) {
+    //     velocity.0 -= velocity_delta
+    // }
+    // velocity.0 = transform.forward() * velocity.0.length();
+    //
+    // velocity.0 = velocity.0.clamp_length_max(params.max_velocity);
+    //
+    // if !action.pressed(&Action::MoveForward) && !action.pressed(&Action::MoveBackward) {
+    //     velocity.0.x *= params.dampening;
+    //     velocity.0.z *= params.dampening;
+    // }
 
     cfg_if::cfg_if! {
         if #[cfg(debug_assertions)] {
@@ -132,22 +162,6 @@ fn movement(
             );
         }
     }
-
-    let velocity_delta = transform.forward() * params.acceleration * dt;
-    if action.pressed(&Action::MoveForward) {
-        velocity.0 += velocity_delta
-    }
-    if action.pressed(&Action::MoveBackward) {
-        velocity.0 -= velocity_delta
-    }
-    velocity.0 = transform.forward() * velocity.0.length();
-
-    velocity.0 = velocity.0.clamp_length_max(params.max_velocity);
-
-    if !action.pressed(&Action::MoveForward) && !action.pressed(&Action::MoveBackward) {
-        velocity.0.x *= params.dampening;
-        velocity.0.z *= params.dampening;
-    }
 }
 
 fn aim_turret(
@@ -157,7 +171,6 @@ fn aim_turret(
     >,
     players: Query<&Transform, With<Player>>,
     aim_position: Res<AimPosition>,
-    mut gizmos: Gizmos,
 ) {
     for (parent, mut turret_transform, global_turret_transform) in turrets.iter_mut() {
         let aim_position_adjusted_to_local_turret_space =
@@ -165,7 +178,6 @@ fn aim_turret(
         let player_transform = players
             .get(parent.get())
             .expect("Expected the turret to have a player.");
-        // let target = Vec3::new(aim_position.0.x, 0.0, aim_position.0.z).normalize_or_zero();
         let target = project_vector_onto_plane_y_axis(
             aim_position_adjusted_to_local_turret_space,
             turret_transform.local_y(),
@@ -173,23 +185,6 @@ fn aim_turret(
         );
         turret_transform.look_at(target, Vec3::Y);
         turret_transform.rotation *= player_transform.rotation.inverse();
-
-        // let target = aim_position.0.xz();
-        // info!("{:?}", target);
-        // let angle = target
-        //     .normalize_or_zero()
-        //     .dot(turret_transform.translation.xz().normalize_or_zero())
-        //     .acos();
-        // info!("{:?}", angle);
-        // turret_transform.rotate_y(angle);
-
-        // let undo_inherited_rotation_angle = -player_transform
-        //     .forward()
-        //     .normalize_or_zero()
-        //     .dot(target.normalize_or_zero())
-        //     .acos();
-        // info!("{:?}", undo_inherited_rotation_angle);
-        // turret_transform.rotate_local_y(undo_inherited_rotation_angle);
     }
 }
 

@@ -6,6 +6,7 @@ use bevy_xpbd_3d::{
     prelude::PhysicsLayer,
 };
 use leafwing_input_manager::{plugin::InputManagerPlugin, Actionlike};
+use tanks::cycle_fullscreen_on_f11;
 
 use crate::player::{PlayerBundle, PlayerPlugin, Turret, TurretBundle};
 
@@ -41,7 +42,7 @@ impl Plugin for GamePlugin {
             ))
             .add_plugins(PlayerPlugin)
             .add_systems(Startup, setup)
-            .add_systems(Update, close_on_esc);
+            .add_systems(Update, (close_on_esc, cycle_fullscreen_on_f11));
     }
 }
 
@@ -81,6 +82,7 @@ fn setup(
             pbr_bundle: PbrBundle {
                 mesh: turret_mesh,
                 material: turret_material,
+                transform: Transform::from_xyz(0.0, 0.3, 0.0),
                 ..Default::default()
             },
         })
@@ -93,7 +95,7 @@ fn setup(
     let player_collider = commands
         .spawn((Collider::default(), Transform::from_xyz(0.0, 0.0, 0.0)))
         .id();
-    let base = commands
+    commands
         .spawn(PlayerBundle {
             pbr_bundle: PbrBundle {
                 mesh: player_mesh,
@@ -106,8 +108,7 @@ fn setup(
             ..Default::default()
         })
         .add_child(turret)
-        .add_child(player_collider)
-        .id();
+        .add_child(player_collider);
 
     commands.insert_resource(AmbientLight {
         color: Color::WHITE,
