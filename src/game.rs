@@ -2,6 +2,7 @@ use bevy::{prelude::*, window::close_on_esc};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_xpbd_3d::{
     components::{CollisionLayers, LayerMask, LockedAxes, RigidBody},
+    math::PI,
     plugins::{collision::Collider, PhysicsDebugPlugin, PhysicsPlugins},
     prelude::PhysicsLayer,
 };
@@ -73,7 +74,7 @@ fn setup(
     let ground_mesh = meshes.add(Plane3d::default().mesh().size(15.0, 15.0));
     commands.spawn((
         PbrBundle {
-            mesh: ground_mesh,
+            mesh: ground_mesh.clone(),
             material: ground_material.clone(),
             ..Default::default()
         },

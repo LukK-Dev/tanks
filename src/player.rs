@@ -137,29 +137,17 @@ fn movement(
     let (mut transform, params, mut turn_velocity, mut velocity, last_frame_velocity, action) =
         player.unwrap();
     let dt = time.delta_seconds();
-
-    // let velocity_delta = transform.forward() * params.acceleration * dt;
-    // if action.pressed(&Action::MoveForward) {
-    //     velocity.0 += velocity_delta
-    // }
-    // if action.pressed(&Action::MoveBackward) {
-    //     velocity.0 -= velocity_delta
-    // }
-    // velocity.0 = transform.forward() * velocity.0.length();
-    //
-    // velocity.0 = velocity.0.clamp_length_max(params.max_velocity);
-    //
-    // if !action.pressed(&Action::MoveForward) && !action.pressed(&Action::MoveBackward) {
-    //     velocity.0.x *= params.dampening;
-    //     velocity.0.z *= params.dampening;
-    // }
+    let mut forward_sign = 1.0;
 
     match (
         action.pressed(&Action::MoveForward),
         action.pressed(&Action::MoveBackward),
     ) {
         (true, false) => velocity.0 += transform.forward() * params.acceleration * dt,
-        (false, true) => velocity.0 -= transform.forward() * params.acceleration * dt,
+        (false, true) => {
+            forward_sign = -1.0;
+            velocity.0 -= transform.forward() * params.acceleration * dt
+        }
         _ => {
             let dampening_factor = 1.0 - params.dampening * dt;
             velocity.0.x *= dampening_factor;
@@ -182,8 +170,14 @@ fn movement(
         }
     }
 
-    let velocity_delta = velocity.0 - last_frame_velocity.0;
-    let forward_sign = transform.forward().xz().dot(velocity_delta.xz()).signum();
+    // TODO: change turn direction when reversing
+    // let velocity_delta = velocity.0 - last_frame_velocity.0;
+    // let mut forward_sign = transform.forward().xz().dot(velocity_delta.xz()).signum();
+    // if velocity_delta.length() < 0.004
+    //     && !(action.pressed(&Action::TurnLeft) && action.pressed(&Action::TurnRight))
+    // {
+    //     forward_sign = 1.0;
+    // }
     match (
         action.pressed(&Action::TurnLeft),
         action.pressed(&Action::TurnRight),
