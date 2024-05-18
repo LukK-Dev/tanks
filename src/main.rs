@@ -1,5 +1,6 @@
 mod game;
 mod player;
+mod turret;
 
 use bevy::prelude::*;
 use game::GamePlugin;

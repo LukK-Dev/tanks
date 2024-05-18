@@ -1,15 +1,13 @@
 use bevy::{prelude::*, window::close_on_esc};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use bevy_xpbd_3d::{
-    components::{CollisionLayers, LayerMask, LockedAxes, RigidBody},
-    math::PI,
-    plugins::{collision::Collider, PhysicsDebugPlugin, PhysicsPlugins},
-    prelude::PhysicsLayer,
-};
+use bevy_xpbd_3d::prelude::*;
 use leafwing_input_manager::{plugin::InputManagerPlugin, Actionlike};
 use tanks::cycle_fullscreen_on_f11;
 
-use crate::player::{PlayerBundle, PlayerPlugin, Turret, TurretBundle};
+use crate::{
+    player::{PlayerBundle, PlayerPlugin},
+    turret::{Turret, TurretBundle},
+};
 
 #[derive(Actionlike, PartialEq, Eq, Hash, Clone, Copy, Debug, Reflect)]
 pub enum Action {
@@ -83,11 +81,17 @@ fn setup(
         CollisionLayers::new(GamePhysicsLayer::Ground, LayerMask::ALL),
     ));
 
+    let gun_mesh: Handle<Mesh> = asset_server.load("tank.glb#Mesh2/Primitive0");
+    let gun_material = materials.add(Color::PURPLE);
+    let gun = commands
+        .spawn(PbrBundle {
+            mesh: gun_mesh,
+            material: gun_material,
+            ..Default::default()
+        })
+        .id();
     let turret_mesh: Handle<Mesh> = asset_server.load("tank.glb#Mesh1/Primitive0");
-    let turret_material = materials.add(StandardMaterial {
-        base_color: Color::YELLOW_GREEN,
-        ..Default::default()
-    });
+    let turret_material = materials.add(Color::YELLOW_GREEN);
     let turret = commands
         .spawn(TurretBundle {
             turret: Turret,
@@ -98,21 +102,19 @@ fn setup(
                 ..Default::default()
             },
         })
+        .add_child(gun)
         .id();
     let player_mesh: Handle<Mesh> = asset_server.load("tank.glb#Mesh0/Primitive0");
-    let player_material = materials.add(StandardMaterial {
-        base_color: Color::LIME_GREEN,
-        ..Default::default()
-    });
+    let player_material = materials.add(Color::LIME_GREEN);
     let player_collider = commands
         .spawn((
-            Collider::default(),
-            Transform::from_xyz(0.0, 0.1, 0.0),
+            Collider::cuboid(0.7, 0.4, 1.0),
+            Transform::from_xyz(0.0, 0.0, -0.1),
             CollisionLayers::default(),
         ))
         .id();
     commands
-        .spawn(PlayerBundle {
+        .spawn((PlayerBundle {
             pbr_bundle: PbrBundle {
                 mesh: player_mesh,
                 material: player_material,
@@ -122,7 +124,7 @@ fn setup(
             rigidbody: RigidBody::Dynamic,
             locked_axes: LockedAxes::from_bits(0b000_111),
             ..Default::default()
-        })
+        },))
         .add_child(turret)
         .add_child(player_collider);
 
