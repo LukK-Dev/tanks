@@ -1,15 +1,22 @@
+use crate::project_vector_onto_plane_y_axis;
 use bevy::{prelude::*, window::PrimaryWindow};
 use bevy_xpbd_3d::plugins::spatial_query::{SpatialQuery, SpatialQueryFilter};
-use tanks::project_vector_onto_plane_y_axis;
 
-use crate::{game::GamePhysicsLayer, player::Player};
+use crate::{game::GamePhysicsLayer, player::Player, projectile::ProjectilePlugin};
 
 pub struct TurretPlugin;
 
 impl Plugin for TurretPlugin {
     fn build(&self, app: &mut App) {
+        // app.add_plugins(ProjectilePlugin)
         app.insert_resource(AimPosition(Vec3::default()))
             .add_systems(Update, (update_aim_position, aim_turret).chain());
+
+        cfg_if::cfg_if! {
+            if #[cfg(debug_assertions)] {
+                app.add_systems(Update, debug_draw_projectile_trajectories);
+            }
+        }
     }
 }
 
@@ -81,6 +88,22 @@ fn update_aim_position(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+cfg_if::cfg_if! {
+    if #[cfg(debug_assertions)] {
+        fn debug_draw_projectile_trajectories(
+        turrets: Query<&GlobalTransform, With<Turret>>,
+        aim_position: Res<AimPosition>,
+        mut gizmos: Gizmos,
+        ) {
+            let projectile_velocity = 30.0;
+            for turret_transform in turrets.iter() {
+                let launch_height = turret_transform.translation().y;
+                gizmos.line(turret_transform.translation(), aim_position.0, Color::SEA_GREEN);
             }
         }
     }

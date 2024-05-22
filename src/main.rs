@@ -1,9 +1,5 @@
-mod game;
-mod player;
-mod turret;
-
 use bevy::prelude::*;
-use game::GamePlugin;
+use tanks::game::GamePlugin;
 
 fn main() {
     App::default().add_plugins(GamePlugin).run();

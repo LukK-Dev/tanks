@@ -1,3 +1,8 @@
+pub mod game;
+pub mod player;
+pub mod projectile;
+pub mod turret;
+
 use bevy::prelude::*;
 
 pub fn project_vector_onto_plane_y_axis(
@@ -7,7 +12,7 @@ pub fn project_vector_onto_plane_y_axis(
 ) -> Vec3 {
     let d = plane_normal.dot(plane_position);
     let projected_y = (d - plane_normal.x * vector.x - plane_normal.z * vector.z) / plane_normal.y;
-    return Vec3::new(vector.x, projected_y, vector.z);
+    Vec3::new(vector.x, projected_y, vector.z)
 }
 
 pub fn cycle_fullscreen_on_f11(
